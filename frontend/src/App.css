@@ -247,3 +247,23 @@ body {
   color: #666;
   margin-bottom: 10px;
 }
+
+/* Hosted mode privacy notice */
+.privacy-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(6, 114, 203, 0.08);
+  border: 1px solid rgba(6, 114, 203, 0.2);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #444;
+  margin-bottom: 4px;
+}
+.privacy-notice svg {
+  color: #0672cb;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
