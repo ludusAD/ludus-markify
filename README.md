@@ -100,6 +100,34 @@ tests/             backend unit and HTTP tests
 
 ---
 
+## Self-hosting (server deployment)
+
+Set `HOSTED=true` before starting the backend, and build the frontend with `VITE_HOSTED=true`:
+
+```bash
+# Build frontend for hosting
+cd frontend
+VITE_HOSTED=true npm run build
+cd ..
+
+# Run backend (serves the built frontend + API)
+HOSTED=true uvicorn backend.server:app --host 0.0.0.0 --port 8000
+```
+
+In hosted mode:
+- The `/save` endpoint is disabled — files cannot be written to the server's disk.
+- The frontend shows a download button instead of the save-to-folder UI.
+- A privacy notice is shown to users: "Files are converted in memory and discarded immediately. Nothing is stored or visible — not to us, not to anyone."
+- The built React app is served directly by FastAPI (no separate frontend process needed).
+
+Set `SITE_DOMAIN` to your public domain if you need CORS support from that origin:
+
+```bash
+HOSTED=true SITE_DOMAIN=https://your-domain.com uvicorn backend.server:app --host 0.0.0.0 --port 8000
+```
+
+---
+
 ## Run tests
 
 ```bash

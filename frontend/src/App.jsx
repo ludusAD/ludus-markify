@@ -5,6 +5,8 @@ import Preview from "./components/Preview";
 import { convertFiles, saveFile } from "./api";
 import "./App.css";
 
+const HOSTED = import.meta.env.VITE_HOSTED === "true";
+
 export default function App() {
   const [queued, setQueued] = useState([]);   // File objects waiting to convert
   const [results, setResults] = useState([]); // ConversionResult[]
@@ -73,7 +75,16 @@ export default function App() {
     <div className="layout">
       <aside className="sidebar">
         <h1 className="app-title">MarkItDown</h1>
-        <p className="app-sub">Convert documents to Markdown locally</p>
+        <p className="app-sub">{HOSTED ? "Convert documents to Markdown — free, online" : "Convert documents to Markdown locally"}</p>
+
+        {HOSTED && (
+          <div className="privacy-notice">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" width="14" height="14">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+            <span>Files are converted in memory and discarded immediately. Nothing is stored or visible — not to us, not to anyone.</span>
+          </div>
+        )}
 
         <DropZone onFiles={addFiles} />
 
@@ -116,18 +127,33 @@ export default function App() {
               ))}
             </div>
 
-            <label className="output-label">Output folder</label>
-            <input
-              className="output-input"
-              type="text"
-              placeholder="/path/to/output"
-              value={outputDir}
-              onChange={(e) => setOutputDir(e.target.value)}
-            />
-            {savedMsg && (
-              <p className={`saved-msg${savedMsg.startsWith("Error") ? " saved-error" : ""}`}>
-                {savedMsg}
-              </p>
+            {HOSTED ? (
+              selected !== null && results[selected]?.status === "ok" && (
+                <a
+                  className="btn-convert"
+                  href={`data:text/markdown;charset=utf-8,${encodeURIComponent(results[selected].markdown)}`}
+                  download={results[selected].input_name.replace(/\.[^.]+$/, "") + ".md"}
+                  style={{ textAlign: "center", textDecoration: "none", display: "block" }}
+                >
+                  Download .md
+                </a>
+              )
+            ) : (
+              <>
+                <label className="output-label">Output folder</label>
+                <input
+                  className="output-input"
+                  type="text"
+                  placeholder="/path/to/output"
+                  value={outputDir}
+                  onChange={(e) => setOutputDir(e.target.value)}
+                />
+                {savedMsg && (
+                  <p className={`saved-msg${savedMsg.startsWith("Error") ? " saved-error" : ""}`}>
+                    {savedMsg}
+                  </p>
+                )}
+              </>
             )}
 
             <button className="btn-new" onClick={() => { setQueued([]); setResults([]); setSelected(null); setSavedMsg(""); }}>
