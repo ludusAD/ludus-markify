@@ -1,4 +1,4 @@
-# MarkItDown
+# Ludus Markify
 
 A local-first app to convert documents to Markdown. Drop in files, preview the result, and save `.md` files to any folder on your machine.
 
