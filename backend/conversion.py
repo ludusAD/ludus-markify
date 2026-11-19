@@ -1,4 +1,5 @@
 import io
+import re
 import tempfile
 from pathlib import Path
 
@@ -8,6 +9,8 @@ from .models import ConversionResult, InputFile, Status, UserError
 
 _converter = MarkItDown()
 _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
+# A pipe that is not escaped as \| separates table cells.
+_CELL_SPLIT = re.compile(r"(?<!\\)\|")
 
 
 def convert_file(f: InputFile) -> ConversionResult:
@@ -180,11 +183,16 @@ def _table_to_md(rows: list) -> str:
     if not rows:
         return ""
 
+    def cell(c) -> str:
+        # A raw | would split the cell and a raw newline would end the row.
+        text = str(c).strip() if c is not None else ""
+        return text.replace("\r\n", "\n").replace("\n", "<br>").replace("|", "\\|")
+
     norm = []
     for row in rows:
         if row is None:
             continue
-        norm.append([str(c).strip() if c is not None else "" for c in row])
+        norm.append([cell(c) for c in row])
 
     if not norm:
         return ""
@@ -232,7 +240,7 @@ def _normalize_md_tables(md: str) -> str:
             i += 1
 
         def ncols(line: str) -> int:
-            segs = line.split("|")
+            segs = _CELL_SPLIT.split(line)
             if segs and not segs[0].strip():
                 segs = segs[1:]
             if segs and not segs[-1].strip():
@@ -240,7 +248,7 @@ def _normalize_md_tables(md: str) -> str:
             return len(segs)
 
         def is_sep(line: str) -> bool:
-            inner = [s.strip() for s in line.split("|") if s.strip()]
+            inner = [s.strip() for s in _CELL_SPLIT.split(line) if s.strip()]
             return bool(inner) and all(
                 s.replace("-", "").replace(":", "").replace(" ", "") == "" for s in inner
             )

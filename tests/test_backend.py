@@ -1,3 +1,4 @@
+import asyncio
 import io
 import tempfile
 from pathlib import Path
@@ -242,3 +243,94 @@ def test_post_save_bad_dir():
         json={"input_name": "x.txt", "markdown": "hi", "output_dir": "/no/such/path"},
     )
     assert resp.status_code == 400
+
+
+# --- table cell escaping ---
+
+def test_table_cell_pipe_is_escaped():
+    md = _table_to_md([["Name", "Note"], ["a", "x | y"]])
+    assert "| a | x \\| y |" in md
+    assert all(line.count("|") - line.count("\\|") == 3 for line in md.split("\n"))
+
+
+def test_table_cell_newline_becomes_line_break():
+    md = _table_to_md([["H1", "H2"], ["two\nlines", "ok"]])
+    assert "two<br>lines" in md
+    assert len(md.split("\n")) == 3
+
+
+# --- save never overwrites ---
+
+def test_save_markdown_does_not_overwrite_existing_file():
+    with tempfile.TemporaryDirectory() as d:
+        first = save_markdown("# one", "report.pdf", Path(d))
+        second = save_markdown("# two", "report.docx", Path(d))
+        assert first.name == "report.md"
+        assert second.name == "report (1).md"
+        assert first.read_text() == "# one"
+        assert second.read_text() == "# two"
+        third = save_markdown("# three", "report.xlsx", Path(d))
+        assert third.name == "report (2).md"
+
+
+def test_save_markdown_ignores_directories_in_input_name():
+    with tempfile.TemporaryDirectory() as d:
+        out = save_markdown("x", "../../evil/..\\sneaky.txt", Path(d))
+        assert out.parent == Path(d).resolve()
+        assert out.name.endswith(".md")
+
+
+# --- /save rejects cross-site requests ---
+
+def test_save_rejects_foreign_origin():
+    with tempfile.TemporaryDirectory() as d:
+        resp = client.post(
+            "/save",
+            headers={"Origin": "https://evil.example"},
+            json={"input_name": "a.txt", "markdown": "x", "output_dir": d},
+        )
+        assert resp.status_code == 403
+        assert list(Path(d).iterdir()) == []
+
+
+def test_save_allows_the_local_frontend_origin():
+    with tempfile.TemporaryDirectory() as d:
+        resp = client.post(
+            "/save",
+            headers={"Origin": "http://localhost:3333"},
+            json={"input_name": "a.txt", "markdown": "x", "output_dir": d},
+        )
+        assert resp.status_code == 200
+
+
+# --- conversion must not block the event loop ---
+
+def test_convert_runs_off_the_event_loop(monkeypatch):
+    import backend.server as server
+    from backend.models import ConversionResult
+
+    seen = {}
+
+    def fake_convert(f):
+        try:
+            asyncio.get_running_loop()
+            seen["on_loop"] = True
+        except RuntimeError:
+            seen["on_loop"] = False
+        return ConversionResult(input_name=f.name, status=Status.ok, markdown="ok")
+
+    monkeypatch.setattr(server, "convert_file", fake_convert)
+    resp = client.post("/convert", files=[("files", ("a.txt", b"x", "text/plain"))])
+    assert resp.status_code == 200
+    assert seen["on_loop"] is False
+
+
+# --- naming ---
+
+def test_app_is_named_ludus_markify():
+    assert app.title == "Ludus Markify"
+
+
+def test_normalize_does_not_count_escaped_pipes_as_columns():
+    table = "| A | B |\n| --- | --- |\n| x \\| y | z |"
+    assert _normalize_md_tables(table) == table

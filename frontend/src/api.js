@@ -1,4 +1,9 @@
-const BASE = "http://localhost:8000";
+// Local dev: the backend runs on :8000 next to the Vite dev server (:3333).
+// Hosted build: FastAPI serves this app, so the API is on the same origin.
+// VITE_API_BASE overrides both (for example "https://api.example.com").
+const BASE =
+  import.meta.env.VITE_API_BASE ??
+  (import.meta.env.VITE_HOSTED === "true" ? "" : "http://localhost:8000");
 
 export async function convertFiles(files) {
   const form = new FormData();

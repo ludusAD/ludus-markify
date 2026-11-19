@@ -14,8 +14,8 @@ PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), plain text, HTML, images (
 
 ## Requirements
 
-- Python 3.10+
-- Node.js 18+
+- Python 3.10+ (on Debian/Ubuntu also `sudo apt install python3-venv`)
+- Node.js 20.19+ or 22.12+ (Vite 8 does not run on older versions)
 - [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) — optional, only needed for image files
 
 ---
@@ -23,8 +23,8 @@ PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), plain text, HTML, images (
 ## Installation
 
 ```bash
-git clone https://github.com/ludusAD/markitdown.git
-cd markitdown
+git clone https://github.com/ludusAD/ludus-markify.git
+cd ludus-markify
 
 # Backend
 python3 -m venv .venv
@@ -57,7 +57,9 @@ brew install tesseract
 ./start.sh
 ```
 
-Or manually:
+`start.sh` uses `.venv` automatically. If port 8000 or 3333 is already taken it stops with a message and does not touch the other process. (On Windows, use the manual commands below.)
+
+Or manually (activate the venv first: `source .venv/bin/activate`):
 
 ```bash
 # Terminal 1 — backend
@@ -76,7 +78,7 @@ Opens at **http://localhost:3333**
 1. Drag and drop files onto the drop zone (or click to browse)
 2. Click **Convert**
 3. Preview the Markdown output on the right
-4. Enter an output folder path and click **Save** to write `.md` files locally
+4. Enter an output folder path and click **Save** to write `.md` files locally. Saving never overwrites: if `report.md` exists, the new file becomes `report (1).md`.
 
 ---
 
@@ -116,6 +118,7 @@ HOSTED=true uvicorn backend.server:app --host 0.0.0.0 --port 8000
 
 In hosted mode:
 - The `/save` endpoint is disabled — files cannot be written to the server's disk.
+- Uploads are limited to 500 MB per file; set `MAX_UPLOAD_MB=50` (for example) to lower it.
 - The frontend shows a download button instead of the save-to-folder UI.
 - A privacy notice is shown to users: "Files are converted in memory and discarded immediately. Nothing is stored or visible — not to us, not to anyone."
 - The built React app is served directly by FastAPI (no separate frontend process needed).
@@ -132,6 +135,7 @@ HOSTED=true SITE_DOMAIN=https://your-domain.com uvicorn backend.server:app --hos
 
 ```bash
 source .venv/bin/activate
+pip install pytest httpx           # test-only dependencies
 pytest tests/
 ```
 

@@ -6,3 +6,10 @@ __pycache__/
 output/
 frontend/dist/
 frontend/node_modules/
+.DS_Store
+*.log
+.idea/
+.vscode/
+.env.*
+.ruff_cache/
+.mypy_cache/

@@ -74,7 +74,7 @@ export default function App() {
   return (
     <div className="layout">
       <aside className="sidebar">
-        <h1 className="app-title">MarkItDown</h1>
+        <h1 className="app-title">Ludus Markify</h1>
         <p className="app-sub">{HOSTED ? "Convert documents to Markdown — free, online" : "Convert documents to Markdown locally"}</p>
 
         {HOSTED && (

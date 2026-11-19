@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
+from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -11,12 +12,12 @@ from .conversion import convert_file
 from .filesystem import resolve_output_dir, save_markdown
 from .models import ConversionResult, InputFile, Status, UserError
 
-# Allow uploads up to 500 MB per file
-_MAX_UPLOAD_SIZE = 500 * 1024 * 1024
+# Per-file upload limit (default 500 MB). Lower it on a shared server: MAX_UPLOAD_MB=50
+_MAX_UPLOAD_SIZE = int(os.environ.get("MAX_UPLOAD_MB", "500")) * 1024 * 1024
 
 HOSTED = os.environ.get("HOSTED", "").lower() in ("1", "true", "yes")
 
-app = FastAPI(title="MarkItDown", version="0.1.0")
+app = FastAPI(title="Ludus Markify", version="0.1.0")
 
 _cors_origins = ["http://localhost:3333", "http://127.0.0.1:3333"]
 if HOSTED:
@@ -53,7 +54,9 @@ async def convert(request: Request) -> list[ResultOut]:
         uploads = form.getlist("files")
         for upload in uploads:
             content = await upload.read()
-            result = convert_file(InputFile(name=upload.filename or "upload", content=content))
+            # Conversion is CPU-heavy and synchronous; keep it off the event loop so
+            # other requests (and a second user) are not frozen while it runs.
+            result = await run_in_threadpool(convert_file, InputFile(name=upload.filename or "upload", content=content))
             results.append(_to_out(result))
     finally:
         await form.close()
@@ -61,7 +64,13 @@ async def convert(request: Request) -> list[ResultOut]:
 
 
 @app.post("/save", response_model=ResultOut)
-async def save(req: SaveRequest) -> ResultOut:
+async def save(req: SaveRequest, request: Request) -> ResultOut:
+    # /save writes to the local disk, so a web page on another site must not be
+    # able to trigger it from the user's browser. Browsers always send Origin on
+    # cross-site POSTs; command-line clients send none and stay allowed.
+    origin = request.headers.get("origin")
+    if origin is not None and origin not in _cors_origins:
+        raise HTTPException(status_code=403, detail="Cross-site save requests are not allowed.")
     if HOSTED:
         raise HTTPException(status_code=403, detail="Save to disk is disabled in hosted mode. Use the download button.")
     try:
