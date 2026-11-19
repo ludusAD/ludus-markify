@@ -13,8 +13,27 @@ _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 _CELL_SPLIT = re.compile(r"(?<!\\)\|")
 
 
+# Formats MarkItDown cannot read. Say so plainly instead of returning junk or a cryptic error.
+_UNSUPPORTED = {
+    ".doc": "Old Word files (.doc) are not supported. Open it in Word and save as .docx.",
+    ".ppt": "Old PowerPoint files (.ppt) are not supported. Open it in PowerPoint and save as .pptx.",
+    ".rtf": "Rich Text files (.rtf) are not supported. Open it in Word and save as .docx.",
+    ".pages": "Apple Pages files are not supported. Export to PDF or Word first.",
+    ".numbers": "Apple Numbers files are not supported. Export to Excel first.",
+    ".key": "Apple Keynote files are not supported. Export to PowerPoint or PDF first.",
+    ".odt": "OpenDocument files are not supported. Save as .docx or PDF first.",
+    ".ods": "OpenDocument files are not supported. Save as .xlsx first.",
+    ".odp": "OpenDocument files are not supported. Save as .pptx or PDF first.",
+}
+_MEDIA_MESSAGE = "Audio and video files are not supported. This app converts documents only."
+_MEDIA_EXTENSIONS = {".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac", ".mp4", ".mov", ".avi", ".mkv", ".webm"}
+
+
 def convert_file(f: InputFile) -> ConversionResult:
     suffix = Path(f.name).suffix.lower() or ".bin"
+    reason = _UNSUPPORTED.get(suffix) or (_MEDIA_MESSAGE if suffix in _MEDIA_EXTENSIONS else "")
+    if reason:
+        return ConversionResult(input_name=f.name, status=Status.error, error=reason)
     try:
         markdown = None
 
@@ -34,6 +53,9 @@ def convert_file(f: InputFile) -> ConversionResult:
             markdown = result.text_content
             if not markdown.strip() and suffix in _IMAGE_EXTENSIONS:
                 markdown = _ocr_image(f.content)
+
+        if "\x00" in markdown:
+            raise ValueError("This file looks like binary data, not a document this app can read.")
 
         # Fix any pipe tables whose rows have inconsistent column counts
         markdown = _normalize_md_tables(markdown)
@@ -290,4 +312,6 @@ def _friendly(exc: Exception) -> str:
     msg = str(exc)
     if not msg:
         return type(exc).__name__
+    if "No converter attempted" in msg:
+        return "This file type is not supported, or the file is damaged."
     return msg

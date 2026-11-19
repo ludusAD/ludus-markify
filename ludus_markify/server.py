@@ -8,6 +8,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from .aiprep import bundle_markdown, estimate_tokens, trim_for_ai
 from .conversion import convert_file
 from .filesystem import resolve_output_dir, save_markdown
 from .models import ConversionResult, InputFile, Status, UserError
@@ -20,6 +21,10 @@ HOSTED = os.environ.get("HOSTED", "").lower() in ("1", "true", "yes")
 app = FastAPI(title="Ludus Markify", version="0.1.0")
 
 _cors_origins = ["http://localhost:3333", "http://127.0.0.1:3333"]
+# The packaged CLI serves UI and API from one local port and exports it here.
+_local_port = os.environ.get("LUDUS_MARKIFY_PORT")
+if _local_port:
+    _cors_origins += [f"http://127.0.0.1:{_local_port}", f"http://localhost:{_local_port}"]
 if HOSTED:
     _domain = os.environ.get("SITE_DOMAIN", "https://ludus-technology.com")
     _cors_origins.append(_domain)
@@ -38,6 +43,9 @@ class ResultOut(BaseModel):
     markdown: str
     error: str
     saved_path: str = ""
+    tokens: int = 0              # estimated tokens of `markdown`
+    trimmed_markdown: str = ""   # `markdown` with token-wasting text removed
+    trimmed_tokens: int = 0
 
 
 class SaveRequest(BaseModel):
@@ -61,6 +69,30 @@ async def convert(request: Request) -> list[ResultOut]:
     finally:
         await form.close()
     return results
+
+
+class BundleItem(BaseModel):
+    input_name: str
+    markdown: str
+
+
+class BundleRequest(BaseModel):
+    files: list[BundleItem]
+
+
+class BundleOut(BaseModel):
+    filename: str
+    markdown: str
+    tokens: int
+
+
+@app.post("/bundle", response_model=BundleOut)
+async def bundle(req: BundleRequest) -> BundleOut:
+    """Join converted files into one Markdown text. Nothing is written to disk."""
+    if not req.files:
+        raise HTTPException(status_code=400, detail="Nothing to combine. Convert files first.")
+    text = bundle_markdown([(f.input_name, f.markdown) for f in req.files])
+    return BundleOut(filename="combined.md", markdown=text, tokens=estimate_tokens(text))
 
 
 @app.post("/save", response_model=ResultOut)
@@ -88,21 +120,35 @@ async def save(req: SaveRequest, request: Request) -> ResultOut:
     )
 
 
-# In hosted mode, serve the built React frontend from /api/* and catch-all → index.html
-_frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
-if HOSTED and _frontend_dist.is_dir():
-    app.mount("/assets", StaticFiles(directory=str(_frontend_dist / "assets")), name="assets")
+# Serve the built React app when it exists: bundled in the wheel (ludus_markify/static)
+# or built in a source checkout (frontend/dist). API routes above take priority.
+def _find_frontend() -> Path | None:
+    here = Path(__file__).parent
+    for candidate in (here / "static", here.parent / "frontend" / "dist"):
+        if (candidate / "index.html").is_file():
+            return candidate
+    return None
+
+
+_frontend_dir = _find_frontend()
+if _frontend_dir is not None:
+    if (_frontend_dir / "assets").is_dir():
+        app.mount("/assets", StaticFiles(directory=str(_frontend_dir / "assets")), name="assets")
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa_fallback(full_path: str) -> Response:
-        index = _frontend_dist / "index.html"
+        index = _frontend_dir / "index.html"
         return Response(content=index.read_bytes(), media_type="text/html")
 
 
 def _to_out(r: ConversionResult) -> ResultOut:
+    trimmed = trim_for_ai(r.markdown) if r.markdown else ""
     return ResultOut(
         input_name=r.input_name,
         status=r.status,
         markdown=r.markdown,
         error=r.error,
+        tokens=estimate_tokens(r.markdown),
+        trimmed_markdown=trimmed,
+        trimmed_tokens=estimate_tokens(trimmed),
     )

@@ -6,10 +6,10 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.server import app
-from backend.conversion import convert_file, _table_to_md, _normalize_md_tables, _convert_xlsx
-from backend.filesystem import resolve_output_dir, save_markdown
-from backend.models import InputFile, Status, UserError
+from ludus_markify.server import app
+from ludus_markify.conversion import convert_file, _table_to_md, _normalize_md_tables, _convert_xlsx
+from ludus_markify.filesystem import resolve_output_dir, save_markdown
+from ludus_markify.models import InputFile, Status, UserError
 
 client = TestClient(app)
 
@@ -306,8 +306,8 @@ def test_save_allows_the_local_frontend_origin():
 # --- conversion must not block the event loop ---
 
 def test_convert_runs_off_the_event_loop(monkeypatch):
-    import backend.server as server
-    from backend.models import ConversionResult
+    import ludus_markify.server as server
+    from ludus_markify.models import ConversionResult
 
     seen = {}
 
@@ -334,3 +334,28 @@ def test_app_is_named_ludus_markify():
 def test_normalize_does_not_count_escaped_pipes_as_columns():
     table = "| A | B |\n| --- | --- |\n| x \\| y | z |"
     assert _normalize_md_tables(table) == table
+
+
+# --- unsupported files get a plain explanation ---
+
+def test_legacy_doc_gets_a_clear_error():
+    r = convert_file(InputFile(name="old.doc", content=b"\xd0\xcf\x11\xe0" + b"0" * 100))
+    assert r.status == Status.error
+    assert ".docx" in r.error
+
+
+def test_audio_file_gets_a_clear_error():
+    r = convert_file(InputFile(name="song.mp3", content=b"ID3" + b"0" * 100))
+    assert r.status == Status.error
+    assert "not supported" in r.error
+
+
+def test_binary_garbage_is_not_reported_as_success():
+    r = convert_file(InputFile(name="blob.dat", content=b"\x00\x01\x02\x00" * 50))
+    assert r.status == Status.error
+
+
+def test_damaged_unknown_type_error_is_readable():
+    r = convert_file(InputFile(name="x.xyz123", content=b"\x00\x01\x02"))
+    assert r.status == Status.error
+    assert "Could not convert stream" not in r.error
