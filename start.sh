@@ -11,7 +11,7 @@ fi
 
 if ! command -v uvicorn >/dev/null 2>&1; then
   echo "uvicorn not found. Create the virtual environment first:"
-  echo "  python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt"
+  echo "  python3 -m venv .venv && source .venv/bin/activate && pip install -e ."
   exit 1
 fi
 
@@ -26,7 +26,7 @@ for PORT in 8000 3333; do
 done
 
 # Start backend
-uvicorn backend.server:app --reload --port 8000 &
+uvicorn ludus_markify.server:app --reload --port 8000 &
 BACKEND_PID=$!
 echo "Backend started (PID $BACKEND_PID)"
 

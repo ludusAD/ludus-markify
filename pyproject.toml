@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ludus-markify"
+version = "0.1.0"
+description = "Local-first document to Markdown converter with a simple browser UI."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+  "markitdown[all]>=0.1.0",
+  "fastapi>=0.111.0",
+  "uvicorn>=0.29.0",
+  "python-multipart>=0.0.9",
+  "pytesseract>=0.3.13",
+  "Pillow>=10.0.0",
+  "pdfplumber>=0.11.0",
+]
+
+[project.optional-dependencies]
+mcp = ["mcp>=1.2"]
+
+[project.urls]
+Homepage = "https://github.com/ludusAD/ludus-markify"
+
+[project.scripts]
+ludus-markify = "ludus_markify.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ludus_markify"]
+# static/ is gitignored build output; include it anyway.
+artifacts = ["ludus_markify/static"]
+
+[tool.hatch.build.targets.sdist]
+include = ["ludus_markify", "tests", "README.md", "pyproject.toml"]
+artifacts = ["ludus_markify/static"]

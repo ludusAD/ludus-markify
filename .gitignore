@@ -13,3 +13,6 @@ frontend/node_modules/
 .env.*
 .ruff_cache/
 .mypy_cache/
+ludus_markify/static/
+dist/
+*.egg-info/
