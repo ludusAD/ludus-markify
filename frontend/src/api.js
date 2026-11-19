@@ -1,9 +1,9 @@
-// Local dev: the backend runs on :8000 next to the Vite dev server (:3333).
-// Hosted build: FastAPI serves this app, so the API is on the same origin.
+// Dev server (npm run dev): the backend runs on :8000 next to Vite (:3333).
+// Built app (hosted or packaged CLI): FastAPI serves this app, so the API is on the same origin.
 // VITE_API_BASE overrides both (for example "https://api.example.com").
 const BASE =
   import.meta.env.VITE_API_BASE ??
-  (import.meta.env.VITE_HOSTED === "true" ? "" : "http://localhost:8000");
+  (import.meta.env.PROD ? "" : "http://localhost:8000");
 
 export async function convertFiles(files) {
   const form = new FormData();
@@ -18,6 +18,17 @@ export async function saveFile(inputName, markdown, outputDir) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ input_name: inputName, markdown, output_dir: outputDir }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || `Server error: ${res.status}`);
+  return data;
+}
+
+export async function bundleFiles(files) {
+  const res = await fetch(`${BASE}/bundle`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ files }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || `Server error: ${res.status}`);

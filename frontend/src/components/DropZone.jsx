@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
 
-export default function DropZone({ onFiles }) {
+const FORMATS = ["PDF", "Word", "Excel", "PowerPoint", "HTML", "Text", "Images"];
+
+export default function DropZone({ onFiles, compact = false }) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef(null);
 
@@ -19,16 +21,25 @@ export default function DropZone({ onFiles }) {
 
   return (
     <div
-      className={`dropzone${dragging ? " dragging" : ""}`}
-      onClick={() => inputRef.current.click()}
+      className={`drop${compact ? " drop-compact" : ""}${dragging ? " drop-active" : ""}`}
       onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
       onDragLeave={() => setDragging(false)}
       onDrop={handleDrop}
     >
-      <input ref={inputRef} type="file" multiple hidden onChange={handleChange} />
-      <span className="dropzone-icon">📄</span>
-      <p>Choose files or drag them here</p>
-      <p className="dropzone-sub">PDF, Word, Excel, PowerPoint, HTML, images, and more</p>
+      <input ref={inputRef} id="file-input" type="file" multiple hidden onChange={handleChange} />
+      {compact ? (
+        <button type="button" className="btn-quiet" onClick={() => inputRef.current.click()}>
+          Add more files
+        </button>
+      ) : (
+        <>
+          <p className="drop-title">Drop documents here</p>
+          <button type="button" className="btn-primary" onClick={() => inputRef.current.click()}>
+            Choose files
+          </button>
+          <p className="drop-formats">{FORMATS.join(", ")}, and more</p>
+        </>
+      )}
     </div>
   );
 }
