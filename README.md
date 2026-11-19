@@ -12,64 +12,39 @@ PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), plain text, HTML, images (
 
 ---
 
-## Requirements
+## Quick start
 
-- Python 3.10+ (on Debian/Ubuntu also `sudo apt install python3-venv`)
-- Node.js 20.19+ or 22.12+ (Vite 8 does not run on older versions)
-- [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) — optional, only needed for image files
+```bash
+uvx ludus-markify          # or: pipx run ludus-markify
+```
+
+Opens **http://127.0.0.1:8000** in your browser. Needs Python 3.10+ and [uv](https://docs.astral.sh/uv/) (or pipx). No Node.js needed. Options: `--port 9000`, `--no-browser`.
+
+Optional: [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for image files (`sudo apt install tesseract-ocr` / `brew install tesseract` / [Windows installer](https://github.com/UB-Mannheim/tesseract/wiki)).
 
 ---
 
-## Installation
+## Development
+
+Needs Python 3.10+ and Node.js 20.19+ or 22.12+.
 
 ```bash
 git clone https://github.com/ludusAD/ludus-markify.git
 cd ludus-markify
-
-# Backend
-python3 -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-
-# Frontend
-cd frontend
-npm install
-cd ..
+python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e . pytest httpx
+(cd frontend && npm install)
+./start.sh                                            # backend :8000 + Vite dev server :3333
 ```
 
-Install Tesseract (optional, for image OCR):
+Dev UI opens at **http://localhost:3333**. `start.sh` uses `.venv` automatically and stops if a port is taken.
+
+Build the package (bundles the frontend into the wheel):
 
 ```bash
-# Ubuntu/Debian
-sudo apt install tesseract-ocr
-
-# macOS
-brew install tesseract
-
-# Windows — download from https://github.com/UB-Mannheim/tesseract/wiki
+./scripts/build.sh --wheel      # output in dist/
+twine upload dist/*             # publish to PyPI
 ```
-
----
-
-## Run
-
-```bash
-./start.sh
-```
-
-`start.sh` uses `.venv` automatically. If port 8000 or 3333 is already taken it stops with a message and does not touch the other process. (On Windows, use the manual commands below.)
-
-Or manually (activate the venv first: `source .venv/bin/activate`):
-
-```bash
-# Terminal 1 — backend
-uvicorn backend.server:app --reload --port 8000
-
-# Terminal 2 — frontend
-cd frontend && npm run dev
-```
-
-Opens at **http://localhost:3333**
 
 ---
 
@@ -82,10 +57,45 @@ Opens at **http://localhost:3333**
 
 ---
 
+## Use with AI tools
+
+Markdown costs far fewer tokens than a PDF or Word file, so converting first saves tokens and money. No AI is involved: everything runs on this computer.
+
+- **Token count:** every file shows `≈ N tokens` (an estimate, about 4 characters per token). Real counts vary by AI tool.
+- **Trim for AI:** a checkbox in the results. Removes embedded base64 images, `Page 3 of 9` lines, headers and footers that repeat on 3+ pages, table padding and extra blank lines. Preview, copy and save all use the trimmed text. The saving is shown per file.
+- **Save as one file:** joins all converted files into one `combined.md`, each under a `# File: name` heading.
+- **Command line:** no browser needed.
+
+```bash
+ludus-markify convert report.pdf                     # Markdown to stdout
+ludus-markify convert a.pdf b.docx --trim --tokens   # several files: one text, with # File: headings
+ludus-markify convert *.pdf -o ~/notes               # save one .md per file
+ludus-markify convert *.pdf -o ~/notes --bundle      # save one combined.md
+```
+
+- **MCP server** (Claude Code, Claude Desktop, any MCP client): the AI tool calls the converter locally and receives Markdown instead of a binary file.
+
+```bash
+claude mcp add ludus-markify -- uvx --from "ludus-markify[mcp]" ludus-markify mcp
+```
+
+For Claude Desktop add the same command to `claude_desktop_config.json` under `mcpServers`. The tool is `convert_to_markdown(paths, trim=true)`. It reads files on this computer from the paths the AI tool gives it, so only add it to tools you trust.
+
+---
+
+## What it cannot convert
+
+Old `.doc` / `.ppt`, RTF, Apple Pages/Numbers/Keynote, OpenDocument, audio and video get a clear error. Scanned PDFs have no text to read (OCR works for `.jpg`/`.png` only, with Tesseract installed). The same list is shown in the app.
+
+---
+
 ## Project structure
 
 ```
-backend/
+ludus_markify/
+  cli.py           `ludus-markify` command: serve (default), convert
+  aiprep.py        token estimate, trim for AI, bundle (pure text functions)
+  mcp_server.py    MCP server: `ludus-markify mcp`
   server.py        FastAPI app — /convert and /save endpoints
   conversion.py    MarkItDown adapter
   filesystem.py    local file save logic
@@ -95,7 +105,8 @@ frontend/
     App.jsx        main UI
     components/    DropZone, FileRow, Preview
     api.js         fetch calls to backend
-requirements.txt   Python dependencies
+pyproject.toml     package metadata and dependencies
+scripts/build.sh   build frontend into package (+ wheel with --wheel)
 start.sh           starts backend + frontend together
 tests/             backend unit and HTTP tests
 ```
@@ -108,12 +119,10 @@ Set `HOSTED=true` before starting the backend, and build the frontend with `VITE
 
 ```bash
 # Build frontend for hosting
-cd frontend
-VITE_HOSTED=true npm run build
-cd ..
+VITE_HOSTED=true ./scripts/build.sh
 
 # Run backend (serves the built frontend + API)
-HOSTED=true uvicorn backend.server:app --host 0.0.0.0 --port 8000
+HOSTED=true uvicorn ludus_markify.server:app --host 0.0.0.0 --port 8000
 ```
 
 In hosted mode:
@@ -126,7 +135,7 @@ In hosted mode:
 Set `SITE_DOMAIN` to your public domain if you need CORS support from that origin:
 
 ```bash
-HOSTED=true SITE_DOMAIN=https://your-domain.com uvicorn backend.server:app --host 0.0.0.0 --port 8000
+HOSTED=true SITE_DOMAIN=https://your-domain.com uvicorn ludus_markify.server:app --host 0.0.0.0 --port 8000
 ```
 
 ---
@@ -135,7 +144,7 @@ HOSTED=true SITE_DOMAIN=https://your-domain.com uvicorn backend.server:app --hos
 
 ```bash
 source .venv/bin/activate
-pip install pytest httpx           # test-only dependencies
+pip install -e . pytest httpx     # test-only: pytest httpx
 pytest tests/
 ```
 
